@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 const razorpayInstance = require('../config/razorpay');
 const Order = require('../models/Order');
+const whatsappService = require('../services/whatsappService');
 
 /**
  * 1. GET PUBLIC RAZORPAY KEY ID
@@ -152,16 +153,22 @@ exports.verifyPayment = async (req, res) => {
 
     // Handle Mock Orders in Demo Mode
     if (razorpay_order_id.startsWith('order_mock_')) {
+      let mockDbOrder = null;
       if (mongoose.connection.readyState === 1) {
         try {
-          await Order.findOneAndUpdate(
+          mockDbOrder = await Order.findOneAndUpdate(
             { orderId: razorpay_order_id },
             { $set: { status: 'paid', paymentId: razorpay_payment_id, signature: razorpay_signature } },
-            { new: true, upsert: true }
+            { returnDocument: 'after', upsert: true }
           );
         } catch (dbErr) {
           console.error('Failed to update mock order status in MongoDB:', dbErr.message);
         }
+      }
+
+      let whatsappRes = null;
+      if (mockDbOrder) {
+        whatsappRes = await whatsappService.sendOrderConfirmation(mockDbOrder);
       }
 
       return res.status(200).json({
@@ -169,6 +176,7 @@ exports.verifyPayment = async (req, res) => {
         message: 'Mock payment verified successfully (Demo Mode)',
         order_id: razorpay_order_id,
         payment_id: razorpay_payment_id,
+        whatsapp: whatsappRes,
         is_mock: true
       });
     }
@@ -185,10 +193,11 @@ exports.verifyPayment = async (req, res) => {
     const isSignatureValid = expectedSignature === razorpay_signature;
 
     if (isSignatureValid) {
-      // Update database status to 'paid'
+      // Update database status to 'paid' and fetch the updated order document
+      let dbOrder = null;
       if (mongoose.connection.readyState === 1) {
         try {
-          await Order.findOneAndUpdate(
+          dbOrder = await Order.findOneAndUpdate(
             { orderId: razorpay_order_id },
             {
               $set: {
@@ -197,18 +206,25 @@ exports.verifyPayment = async (req, res) => {
                 signature: razorpay_signature
               }
             },
-            { new: true, upsert: true }
+            { returnDocument: 'after', upsert: true }
           );
         } catch (dbErr) {
           console.error('Failed to update order status in MongoDB:', dbErr.message);
         }
       }
 
+      // Automatically dispatch WhatsApp confirmation message to customer phone from database
+      let whatsappResult = null;
+      if (dbOrder) {
+        whatsappResult = await whatsappService.sendOrderConfirmation(dbOrder);
+      }
+
       return res.status(200).json({
         success: true,
         message: 'Payment verified successfully! Signature is valid.',
         order_id: razorpay_order_id,
-        payment_id: razorpay_payment_id
+        payment_id: razorpay_payment_id,
+        whatsapp: whatsappResult
       });
     } else {
       return res.status(400).json({
@@ -266,10 +282,14 @@ exports.handleWebhook = async (req, res) => {
         const paymentEntity = payload.payment.entity;
         console.log(`✅ Payment Captured! Payment ID: ${paymentEntity.id}, Order ID: ${paymentEntity.order_id}, Amount: ₹${paymentEntity.amount / 100}`);
         if (mongoose.connection.readyState === 1) {
-          await Order.findOneAndUpdate(
+          const updatedOrder = await Order.findOneAndUpdate(
             { orderId: paymentEntity.order_id },
-            { $set: { status: 'paid', paymentId: paymentEntity.id } }
+            { $set: { status: 'paid', paymentId: paymentEntity.id } },
+            { returnDocument: 'after' }
           );
+          if (updatedOrder && updatedOrder.status === 'paid') {
+            await whatsappService.sendOrderConfirmation(updatedOrder);
+          }
         }
         break;
       }
@@ -412,6 +432,30 @@ exports.getAllOrders = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching orders from database:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * 9. RESEND / TRIGGER WHATSAPP NOTIFICATION
+ * Endpoint: POST /api/payment/send-whatsapp/:orderId
+ */
+exports.resendWhatsApp = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await Order.findOne({ orderId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: `Order not found with ID: ${orderId}` });
+    }
+
+    const result = await whatsappService.sendOrderConfirmation(order);
+    return res.status(200).json({
+      success: true,
+      message: 'WhatsApp notification dispatched',
+      result
+    });
+  } catch (error) {
+    console.error('Error resending WhatsApp notification:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };

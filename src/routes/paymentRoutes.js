@@ -33,4 +33,7 @@ router.post('/refund', paymentController.initiateRefund);
 // 8. Get All Orders Stored in Database
 router.get('/orders', paymentController.getAllOrders);
 
+// 9. Resend / Trigger WhatsApp Order Notification
+router.post('/send-whatsapp/:orderId', paymentController.resendWhatsApp);
+
 module.exports = router;
