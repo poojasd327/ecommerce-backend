@@ -61,7 +61,8 @@ exports.createOrder = async (req, res) => {
       return res.status(200).json({
         success: true,
         message: 'Order created in Demo Mode. (Add valid Razorpay API keys in .env for live test payments)',
-        order: mockOrder
+        order: mockOrder,
+        key_id: keyId
       });
     }
 
@@ -70,7 +71,8 @@ exports.createOrder = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Razorpay order created successfully',
-      order
+      order,
+      key_id: keyId
     });
   } catch (error) {
     console.error('Error creating Razorpay order:', error);
