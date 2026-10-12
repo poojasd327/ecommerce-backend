@@ -1,5 +1,7 @@
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const razorpayInstance = require('../config/razorpay');
+const Order = require('../models/Order');
 
 /**
  * 1. GET PUBLIC RAZORPAY KEY ID
@@ -15,11 +17,11 @@ exports.getRazorpayKey = (req, res) => {
 /**
  * 2. CREATE A RAZORPAY ORDER
  * Endpoint: POST /api/payment/create-order
- * Request Body: { amount: 500, currency: "INR", receipt: "receipt#101", notes: {} }
+ * Request Body: { amount: 500, currency: "INR", receipt: "receipt#101", notes: {}, items: [] }
  */
 exports.createOrder = async (req, res) => {
   try {
-    const { amount, currency = 'INR', receipt, notes } = req.body;
+    const { amount, currency = 'INR', receipt, notes, items } = req.body;
 
     if (!amount || isNaN(amount) || Number(amount) <= 0) {
       return res.status(400).json({
@@ -58,6 +60,30 @@ exports.createOrder = async (req, res) => {
         is_mock: true
       };
 
+      // Save mock order to MongoDB if connected
+      if (mongoose.connection.readyState === 1) {
+        try {
+          await Order.create({
+            orderId: mockOrder.id,
+            amount: Number(amount),
+            currency: mockOrder.currency,
+            status: 'created',
+            receipt: mockOrder.receipt,
+            customer: {
+              name: notes?.customer_name || '',
+              email: notes?.customer_email || '',
+              phone: notes?.customer_phone || '',
+              shippingAddress: notes?.shipping_address || ''
+            },
+            items: items || [],
+            notes: options.notes,
+            isMock: true
+          });
+        } catch (dbErr) {
+          console.error('Failed to save mock order in MongoDB:', dbErr.message);
+        }
+      }
+
       return res.status(200).json({
         success: true,
         message: 'Order created in Demo Mode. (Add valid Razorpay API keys in .env for live test payments)',
@@ -67,6 +93,30 @@ exports.createOrder = async (req, res) => {
     }
 
     const order = await razorpayInstance.orders.create(options);
+
+    // Persist real order in MongoDB if connected
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await Order.create({
+          orderId: order.id,
+          amount: Number(amount),
+          currency: order.currency,
+          status: 'created',
+          receipt: order.receipt,
+          customer: {
+            name: notes?.customer_name || '',
+            email: notes?.customer_email || '',
+            phone: notes?.customer_phone || '',
+            shippingAddress: notes?.shipping_address || ''
+          },
+          items: items || [],
+          notes: options.notes,
+          isMock: false
+        });
+      } catch (dbErr) {
+        console.error('Failed to save order to MongoDB:', dbErr.message);
+      }
+    }
 
     return res.status(200).json({
       success: true,
@@ -102,6 +152,18 @@ exports.verifyPayment = async (req, res) => {
 
     // Handle Mock Orders in Demo Mode
     if (razorpay_order_id.startsWith('order_mock_')) {
+      if (mongoose.connection.readyState === 1) {
+        try {
+          await Order.findOneAndUpdate(
+            { orderId: razorpay_order_id },
+            { $set: { status: 'paid', paymentId: razorpay_payment_id, signature: razorpay_signature } },
+            { new: true, upsert: true }
+          );
+        } catch (dbErr) {
+          console.error('Failed to update mock order status in MongoDB:', dbErr.message);
+        }
+      }
+
       return res.status(200).json({
         success: true,
         message: 'Mock payment verified successfully (Demo Mode)',
@@ -123,7 +185,25 @@ exports.verifyPayment = async (req, res) => {
     const isSignatureValid = expectedSignature === razorpay_signature;
 
     if (isSignatureValid) {
-      // TODO: Update your database status to 'PAID', save payment_id & order_id
+      // Update database status to 'paid'
+      if (mongoose.connection.readyState === 1) {
+        try {
+          await Order.findOneAndUpdate(
+            { orderId: razorpay_order_id },
+            {
+              $set: {
+                status: 'paid',
+                paymentId: razorpay_payment_id,
+                signature: razorpay_signature
+              }
+            },
+            { new: true, upsert: true }
+          );
+        } catch (dbErr) {
+          console.error('Failed to update order status in MongoDB:', dbErr.message);
+        }
+      }
+
       return res.status(200).json({
         success: true,
         message: 'Payment verified successfully! Signature is valid.',
@@ -185,19 +265,34 @@ exports.handleWebhook = async (req, res) => {
       case 'payment.captured': {
         const paymentEntity = payload.payment.entity;
         console.log(`✅ Payment Captured! Payment ID: ${paymentEntity.id}, Order ID: ${paymentEntity.order_id}, Amount: ₹${paymentEntity.amount / 100}`);
-        // TODO: Fulfill order in DB (mark as processing / paid)
+        if (mongoose.connection.readyState === 1) {
+          await Order.findOneAndUpdate(
+            { orderId: paymentEntity.order_id },
+            { $set: { status: 'paid', paymentId: paymentEntity.id } }
+          );
+        }
         break;
       }
       case 'payment.failed': {
         const paymentEntity = payload.payment.entity;
         console.log(`❌ Payment Failed! Payment ID: ${paymentEntity.id}, Reason: ${paymentEntity.error_description}`);
-        // TODO: Mark order status as payment_failed in DB
+        if (mongoose.connection.readyState === 1) {
+          await Order.findOneAndUpdate(
+            { orderId: paymentEntity.order_id },
+            { $set: { status: 'failed' } }
+          );
+        }
         break;
       }
       case 'refund.processed': {
         const refundEntity = payload.refund.entity;
         console.log(`💸 Refund Processed! Refund ID: ${refundEntity.id}, Amount: ₹${refundEntity.amount / 100}`);
-        // TODO: Mark refund completed in DB
+        if (mongoose.connection.readyState === 1) {
+          await Order.findOneAndUpdate(
+            { paymentId: refundEntity.payment_id },
+            { $set: { status: 'refunded' } }
+          );
+        }
         break;
       }
       default:
@@ -219,15 +314,20 @@ exports.handleWebhook = async (req, res) => {
 exports.fetchOrderDetails = async (req, res) => {
   try {
     const { orderId } = req.params;
+    let dbRecord = null;
+    if (mongoose.connection.readyState === 1) {
+      dbRecord = await Order.findOne({ orderId });
+    }
+
     if (orderId.startsWith('order_mock_')) {
       return res.status(200).json({
         success: true,
-        order: { id: orderId, status: 'created', note: 'Mock Order' }
+        order: dbRecord || { id: orderId, status: 'created', note: 'Mock Order' }
       });
     }
 
     const order = await razorpayInstance.orders.fetch(orderId);
-    return res.status(200).json({ success: true, order });
+    return res.status(200).json({ success: true, order, databaseRecord: dbRecord });
   } catch (error) {
     console.error('Error fetching order:', error);
     return res.status(500).json({ success: false, message: 'Failed to fetch order details', error: error.message });
@@ -272,6 +372,13 @@ exports.initiateRefund = async (req, res) => {
 
     const refund = await razorpayInstance.payments.refund(paymentId, refundOptions);
 
+    if (mongoose.connection.readyState === 1) {
+      await Order.findOneAndUpdate(
+        { paymentId },
+        { $set: { status: 'refunded' } }
+      );
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Refund initiated successfully',
@@ -280,5 +387,31 @@ exports.initiateRefund = async (req, res) => {
   } catch (error) {
     console.error('Error initiating refund:', error);
     return res.status(500).json({ success: false, message: 'Failed to initiate refund', error: error.message });
+  }
+};
+
+/**
+ * 8. GET ALL ORDERS STORED IN DATABASE
+ * Endpoint: GET /api/payment/orders
+ */
+exports.getAllOrders = async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(200).json({
+        success: true,
+        message: 'Database is in standby or not connected yet.',
+        orders: []
+      });
+    }
+
+    const orders = await Order.find().sort({ createdAt: -1 }).limit(50);
+    return res.status(200).json({
+      success: true,
+      count: orders.length,
+      orders
+    });
+  } catch (error) {
+    console.error('Error fetching orders from database:', error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };

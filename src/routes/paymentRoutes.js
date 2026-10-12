@@ -23,4 +23,7 @@ router.get('/payment-details/:paymentId', paymentController.fetchPaymentDetails)
 // 7. Initiate Refund
 router.post('/refund', paymentController.initiateRefund);
 
+// 8. Get All Orders Stored in Database
+router.get('/orders', paymentController.getAllOrders);
+
 module.exports = router;
