@@ -11,8 +11,15 @@ router.post('/create-order', paymentController.createOrder);
 // 3. Verify Payment Signature (HMAC SHA-256)
 router.post('/verify', paymentController.verifyPayment);
 
-// 4. Razorpay Webhook Handler
+// 4. Razorpay Webhook Handler (POST for Razorpay events, GET for browser health check)
 router.post('/webhook', paymentController.handleWebhook);
+router.get('/webhook', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Razorpay Webhook endpoint is active and listening for POST events from Razorpay.',
+    status: 'online'
+  });
+});
 
 // 5. Fetch Order Details by Order ID
 router.get('/order/:orderId', paymentController.fetchOrderDetails);
