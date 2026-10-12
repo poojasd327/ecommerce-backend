@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Razorpay Payment Gateway Tester | E-commerce Backend</title>
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Razorpay Standard Checkout JS SDK -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --card-bg: rgba(22, 30, 46, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent-primary: #6366f1;
+      --accent-secondary: #ec4899;
+      --accent-green: #10b981;
+      --accent-blue: #3b82f6;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(236, 72, 153, 0.12) 0%, transparent 40%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      max-width: 900px;
+      width: 100%;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a5b4fc, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      margin-top: 0.5rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .card h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .product-preview {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      margin-bottom: 1.25rem;
+    }
+
+    .product-icon {
+      width: 54px;
+      height: 54px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+    }
+
+    .product-info h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+
+    .product-info p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      background: rgba(10, 15, 26, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+      font-size: 0.95rem;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    input:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 0.85rem 1.5rem;
+      border-radius: 10px;
+      border: none;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+      color: white;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      box-shadow: none;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: none;
+    }
+
+    .status-log {
+      background: rgba(10, 15, 26, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 1rem;
+      min-height: 240px;
+      max-height: 320px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    .log-line {
+      margin-bottom: 0.5rem;
+      word-break: break-all;
+    }
+
+    .log-info { color: #60a5fa; }
+    .log-success { color: #34d399; }
+    .log-warning { color: #fbbf24; }
+    .log-error { color: #f87171; }
+
+    .instructions-card {
+      margin-top: 1.5rem;
+      grid-column: 1 / -1;
+    }
+
+    .instruction-step {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(99, 102, 241, 0.2);
+      color: var(--accent-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .step-text h4 {
+      font-size: 0.95rem;
+      margin-bottom: 0.2rem;
+    }
+
+    .step-text p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>🛍️ E-commerce Payment Gateway</h1>
+      <p>Node.js + Express + Razorpay Payment Integration Tester</p>
+      <span class="badge" id="statusBadge">Checking API...</span>
+    </header>
+
+    <div class="grid">
+      <!-- Checkout Simulation Card -->
+      <div class="card">
+        <h2>🛍️ Checkout Simulator</h2>
+
+        <div class="product-preview">
+          <div class="product-icon">👗</div>
+          <div class="product-info">
+            <h3>Premium Silk Nightdress</h3>
+            <p>Luxury E-commerce Item #101</p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="amount">Order Amount (INR ₹)</label>
+          <input type="number" id="amount" value="499" min="1" step="1">
+        </div>
+
+        <div class="form-group">
+          <label for="customerName">Customer Name</label>
+          <input type="text" id="customerName" value="Pooja Sharma">
+        </div>
+
+        <div class="form-group">
+          <label for="customerEmail">Customer Email</label>
+          <input type="email" id="customerEmail" value="pooja@example.com">
+        </div>
+
+        <button class="btn" id="payBtn" onclick="initiatePayment()">
+          ⚡ Pay Now with Razorpay
+        </button>
+      </div>
+
+      <!-- Live Console Logs Card -->
+      <div class="card">
+        <h2>💻 Live Backend Log</h2>
+        <div class="status-log" id="logConsole">
+          <div class="log-line log-info">[SYSTEM] Initializing Payment Tester...</div>
+        </div>
+        <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="clearLogs()">🧹 Clear Console</button>
+      </div>
+
+      <!-- Quick API Tools -->
+      <div class="card instructions-card">
+        <h2>⚡ How This Works Under the Hood</h2>
+
+        <div class="instruction-step">
+          <div class="step-num">1</div>
+          <div class="step-text">
+            <h4>Step 1: Order Creation</h4>
+            <p>Clicking "Pay Now" calls <code>POST /api/payment/create-order</code> on your Node.js backend. The server creates an order on Razorpay and returns an <code>order_id</code>.</p>
+          </div>
+        </div>
+
+        <div class="instruction-step">
+          <div class="step-num">2</div>
+          <div class="step-text">
+            <h4>Step 2: Razorpay Modal Popup</h4>
+            <p>The client opens Razorpay's secure checkout modal with your public <code>RAZORPAY_KEY_ID</code> and the generated <code>order_id</code>.</p>
+          </div>
+        </div>
+
+        <div class="instruction-step">
+          <div class="step-num">3</div>
+          <div class="step-text">
+            <h4>Step 3: HMAC Signature Verification</h4>
+            <p>Upon payment completion, Razorpay returns <code>razorpay_payment_id</code> and <code>razorpay_signature</code>. The client sends these to <code>POST /api/payment/verify</code> where your Node.js server verifies the HMAC-SHA256 signature.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function log(msg, type = 'info') {
+      const console = document.getElementById('logConsole');
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = `log-line log-${type}`;
+      div.innerHTML = `[${time}] ${msg}`;
+      console.appendChild(div);
+      console.scrollTop = console.scrollHeight;
+    }
+
+    function clearLogs() {
+      document.getElementById('logConsole').innerHTML = '';
+      log('[SYSTEM] Console cleared.', 'info');
+    }
+
+    // 1. Check API Health & Key on Load
+    async function checkBackendStatus() {
+      try {
+        const res = await fetch('/api/health');
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('statusBadge').innerText = 'Backend Live (Port 5000)';
+          log('✅ Connected to Node.js Express Backend!', 'success');
+        }
+
+        const keyRes = await fetch('/api/payment/key');
+        const keyData = await keyRes.json();
+        if (keyData.key_id === 'rzp_test_YourKeyIdHere') {
+          log('⚠️ Key ID is using placeholder. Add your Razorpay Key ID in .env for live test modal.', 'warning');
+        } else {
+          log(`🔑 Active Razorpay Public Key: ${keyData.key_id}`, 'info');
+        }
+      } catch (err) {
+        document.getElementById('statusBadge').innerText = 'Backend Offline';
+        document.getElementById('statusBadge').style.borderColor = '#f87171';
+        document.getElementById('statusBadge').style.color = '#f87171';
+        log('❌ Failed to reach Node.js server at /api/health', 'error');
+      }
+    }
+
+    window.onload = checkBackendStatus;
+
+    // 2. Initiate Payment Flow
+    async function initiatePayment() {
+      const payBtn = document.getElementById('payBtn');
+      const amount = document.getElementById('amount').value;
+      const name = document.getElementById('customerName').value;
+      const email = document.getElementById('customerEmail').value;
+
+      if (!amount || amount <= 0) {
+        log('❌ Please enter a valid amount in INR.', 'error');
+        return;
+      }
+
+      payBtn.disabled = true;
+      payBtn.innerText = '⌛ Creating Order...';
+
+      try {
+        log(`📡 Requesting order creation for ₹${amount}...`, 'info');
+
+        // Step A: Call backend to create Razorpay Order
+        const res = await fetch('/api/payment/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: Number(amount),
+            currency: 'INR',
+            receipt: 'rcpt_' + Date.now(),
+            notes: { customer_name: name, customer_email: email }
+          })
+        });
+
+        const data = await res.json();
+
+        if (!data.success) {
+          throw new Error(data.message || 'Order creation failed');
+        }
+
+        const order = data.order;
+        log(`✅ Order Created! Order ID: ${order.id} | Amount: ${order.amount} paise`, 'success');
+
+        // Check if Demo Mock Mode
+        if (order.is_mock) {
+          log('ℹ️ Running in Demo Mode. Simulating Razorpay signature verification...', 'warning');
+          setTimeout(() => verifyMockPayment(order.id), 1200);
+          return;
+        }
+
+        // Fetch Key ID
+        const keyRes = await fetch('/api/payment/key');
+        const keyData = await keyRes.json();
+
+        // Step B: Configure Razorpay Checkout Modal
+        const options = {
+          key: keyData.key_id,
+          amount: order.amount,
+          currency: order.currency,
+          name: "Nightdress E-Commerce Store",
+          description: "Purchase Payment",
+          order_id: order.id,
+          prefill: {
+            name: name,
+            email: email,
+            contact: "9999999999"
+          },
+          theme: {
+            color: "#6366f1"
+          },
+          handler: async function (response) {
+            log(`💳 Payment Received! Payment ID: ${response.razorpay_payment_id}`, 'info');
+            log(`🔐 Verifying HMAC Signature with Backend...`, 'info');
+
+            // Step C: Send signatures to Backend for Verification
+            await verifySignatureOnBackend(
+              response.razorpay_order_id,
+              response.razorpay_payment_id,
+              response.razorpay_signature
+            );
+          },
+          modal: {
+            ondismiss: function () {
+              log('⚠️ Customer closed payment popup without completing.', 'warning');
+              payBtn.disabled = false;
+              payBtn.innerText = '⚡ Pay Now with Razorpay';
+            }
+          }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function (response) {
+          log(`❌ Payment Failed: ${response.error.description}`, 'error');
+        });
+
+        rzp.open();
+
+      } catch (err) {
+        log(`❌ Error: ${err.message}`, 'error');
+      } finally {
+        payBtn.disabled = false;
+        payBtn.innerText = '⚡ Pay Now with Razorpay';
+      }
+    }
+
+    // Step C Backend Verification
+    async function verifySignatureOnBackend(order_id, payment_id, signature) {
+      try {
+        const res = await fetch('/api/payment/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            razorpay_order_id: order_id,
+            razorpay_payment_id: payment_id,
+            razorpay_signature: signature
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          log(`🎉 SUCCESS: ${data.message}`, 'success');
+          log(`✅ Order Verified & Paid! Order ID: ${order_id}`, 'success');
+          alert('🎉 Payment Verified Successfully!');
+        } else {
+          log(`❌ Verification Failed: ${data.message}`, 'error');
+          alert('❌ Payment Verification Failed!');
+        }
+      } catch (err) {
+        log(`❌ Verification Request Error: ${err.message}`, 'error');
+      }
+    }
+
+    async function verifyMockPayment(order_id) {
+      log('📡 Verifying mock order with /api/payment/verify...', 'info');
+      await verifySignatureOnBackend(order_id, 'pay_mock_' + Date.now(), 'mock_signature');
+      const payBtn = document.getElementById('payBtn');
+      payBtn.disabled = false;
+      payBtn.innerText = '⚡ Pay Now with Razorpay';
+    }
+  </script>
+</body>
+</html>
